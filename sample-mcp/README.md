@@ -20,6 +20,7 @@ Consult the documentation for each script in the sample-scripts folder to see it
 Notice that any required input file (plan file or others) in this example has been previously uploaded / imported into the SDK client.
 
     uv init cp-agent-server
+    cd cp-agent-server
     uv venv
     source .venv/bin/activate
     uv pip install -r requirements.txt
