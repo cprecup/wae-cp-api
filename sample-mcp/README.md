@@ -24,8 +24,14 @@ Notice that any required input file (plan file or others) in this example has be
     uv venv
     source .venv/bin/activate
     uv pip install -r requirements.txt
-    nano .env # Update with your own token
+    nano .env # Update with your own token, CARIDEN_HOME, and CP_* values
     uv run cp-agent-server-http.py
+
+The Design/OPM Python APIs (`com.cisco.wae`) come from the CP SDK on the host, not from PyPI. Set `CARIDEN_HOME` in `.env` to the `cw-planning` directory (the one that contains `lib/python/com/cisco/wae`). See `.env.example`.
+
+Set `CP_HOST`, `CP_PORT`, `CP_PROTOCOL`, `CP_PLAN_FILE_NAME`, and `CP_PLAN_FILE` in `.env` to your Crosswork Planning server and plan file. The values in the script and `.env.example` are placeholders.
+
+To run under systemd, copy `cp-agent-server.service` to `/etc/systemd/system/`, edit the paths for this host, then `daemon-reload` and `enable --now`.
 
 ## Query examples:
 

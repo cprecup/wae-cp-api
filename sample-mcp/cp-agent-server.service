@@ -1,0 +1,39 @@
+# Install:
+#   sudo cp sample-mcp/cp-agent-server.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now cp-agent-server
+#
+# Edit WorkingDirectory, EnvironmentFile, ExecStart, and CARIDEN_HOME
+# for this host. Secrets stay in sample-mcp/.env (AUTH_STATIC_TOKEN).
+
+[Unit]
+Description=Cisco Crosswork Planning sample MCP server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=cisco
+Group=cisco
+WorkingDirectory=/home/cisco/wae-cp-api-main/sample-mcp
+EnvironmentFile=-/home/cisco/wae-cp-api-main/sample-mcp/.env
+
+# WAE / Crosswork Planning Design RPC + OPM native libs (IcePy).
+# CARIDEN_HOME can also come from .env; these are the loader paths systemd needs
+# before Python starts.
+Environment=CARIDEN_HOME=/home/cisco/cw-planning
+Environment=PYTHONPATH=/home/cisco/cw-planning/lib/python
+Environment=LD_LIBRARY_PATH=/home/cisco/cw-planning/lib:/home/cisco/cw-planning/lib/python
+
+ExecStart=/home/cisco/wae-cp-api-main/sample-mcp/.venv/bin/python /home/cisco/wae-cp-api-main/sample-mcp/cp-agent-server-http.py
+
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+
+# Binds HTTP on 0.0.0.0:3000
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

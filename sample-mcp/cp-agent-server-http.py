@@ -1,5 +1,68 @@
 import os
+import sys
+from pathlib import Path
+
 from dotenv import load_dotenv, find_dotenv
+
+load_dotenv(find_dotenv())
+
+_WAE_SDK_ENV_READY = "_WAE_SDK_ENV_READY"
+
+
+def _resolve_cariden_home() -> Path:
+    """Locate the Crosswork Planning / WAE Design RPC + OPM Python library."""
+    candidates = []
+    env_home = os.getenv("CARIDEN_HOME")
+    if env_home:
+        candidates.append(Path(env_home).expanduser())
+    candidates.extend(
+        [
+            Path.home() / "cw-planning",
+            Path("/opt/cw-plan-sdk/cw-planning"),
+            Path("/opt/cw-planning"),
+        ]
+    )
+    for home in candidates:
+        if (home / "lib" / "python" / "com" / "cisco" / "wae").is_dir():
+            return home.resolve()
+    raise RuntimeError(
+        "Cisco WAE/Crosswork Planning SDK not found. "
+        "Extract the Design RPC/OPM library package and set CARIDEN_HOME "
+        "to the cw-planning directory (must contain lib/python/com/cisco/wae)."
+    )
+
+
+def _configure_wae_sdk() -> None:
+    """Put the WAE SDK on PYTHONPATH and LD_LIBRARY_PATH before Ice imports."""
+    cariden_home = _resolve_cariden_home()
+    sdk_python = cariden_home / "lib" / "python"
+    sdk_lib = cariden_home / "lib"
+    os.environ["CARIDEN_HOME"] = str(cariden_home)
+
+    pythonpath_parts = [str(sdk_python)]
+    existing_pp = os.environ.get("PYTHONPATH")
+    if existing_pp:
+        pythonpath_parts.append(existing_pp)
+    os.environ["PYTHONPATH"] = os.pathsep.join(pythonpath_parts)
+    if str(sdk_python) not in sys.path:
+        sys.path.insert(0, str(sdk_python))
+
+    ld_parts = [str(sdk_lib), str(sdk_python)]
+    existing_ld = os.environ.get("LD_LIBRARY_PATH", "")
+    for part in existing_ld.split(os.pathsep) if existing_ld else []:
+        if part and part not in ld_parts:
+            ld_parts.append(part)
+    os.environ["LD_LIBRARY_PATH"] = os.pathsep.join(ld_parts)
+
+    # Native Ice/WAE libs are resolved at process start; re-exec once with the
+    # updated loader path so `import com.cisco.wae` can load IcePy.
+    if os.environ.get(_WAE_SDK_ENV_READY) == "1":
+        return
+    os.environ[_WAE_SDK_ENV_READY] = "1"
+    os.execvpe(sys.executable, [sys.executable, *sys.argv], os.environ)
+
+
+_configure_wae_sdk()
 
 # CP Design APIs
 import com.cisco.wae.design
@@ -20,8 +83,6 @@ from com.cisco.wae.opm.network.simulation.route.manager import RouteManager
 from fastmcp import FastMCP
 from fastmcp.server.auth.providers.jwt import StaticTokenVerifier
 
-load_dotenv(find_dotenv())
-
 auth = None
 
 if len(os.getenv("AUTH_STATIC_TOKEN", "")) > 0:
@@ -30,11 +91,21 @@ if len(os.getenv("AUTH_STATIC_TOKEN", "")) > 0:
 # Initialize FastMCP server
 mcp = FastMCP("CP Agent MCP Prototype", include_fastmcp_meta=False, auth=auth)
 
-# Constants
-cp_host = '10.10.10.10'
-cp_port = '30744'
-protocol = 'ssl'
-global_plan_file = '/opt/cw-plan-sdk/cw-planning/ai-agent/test_new_agent/plan_files/us_wan.txt'
+# Crosswork Planning Design RPC and the default plan used by every MCP tool.
+# Override with CXP_* / CP_* in sample-mcp/.env. Placeholders only — not a real lab host.
+cp_host = (
+    os.getenv("CXP_DESIGN_HOST")
+    or os.getenv("CXP_HOST")
+    or os.getenv("CP_HOST")
+    or "10.10.10.10"
+)
+cp_port = os.getenv("CXP_DESIGN_PORT") or os.getenv("CP_PORT") or "30744"
+protocol = os.getenv("CP_PROTOCOL", "ssl")
+PLAN_FILE_NAME = os.getenv("CP_PLAN_FILE_NAME", "us_wan.txt")
+global_plan_file = os.getenv(
+    "CP_PLAN_FILE",
+    "/opt/cw-plan-sdk/cw-planning/ai-agent/test_new_agent/plan_files/us_wan.txt",
+)
 
 # Helper Functions
 
@@ -206,7 +277,7 @@ async def run_specific_failure_simulation(object_name, object_type, plan_file=gl
         return max_int_sim_util
 
 @mcp.tool()
-async def get_route_shortest_path(node_a, node_b, metric_type, traffic, plan_file):
+async def get_route_shortest_path(node_a, node_b, metric_type, traffic, plan_file=global_plan_file):
     """This function will query the underlying Crosswork Planning tool that will calculate, for the network selected, the shortest routing path between two nodes, 
     based on the input parameters node_a, node_b, a specific metric_type and a traffic value that will be carried through the routing path. The tool will compute the shortest 
     rounting path, and will determine the details of the routing path. It will return a dictionary that contains details such as mimumum, average and maximum latency, 

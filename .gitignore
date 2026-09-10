@@ -1,0 +1,12 @@
+.venv/
+**/__pycache__/
+*.pyc
+*.pyo
+
+# Local secrets and runtime artifacts
+sample-mcp/.env
+sample-mcp/.venv/
+sample-mcp/*.tar
+sample-mcp/*.zip
+sample-mcp/image.tar
+cp-agent-server/
